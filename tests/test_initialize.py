@@ -1,7 +1,8 @@
-import pytest
-import pandas as pd
-from genomicranges.GenomicRanges import GenomicRanges
 from random import random
+
+import pandas as pd
+import pytest
+from genomicranges.genomic_ranges import GenomicRanges
 
 __author__ = "jkanche"
 __copyright__ = "jkanche"

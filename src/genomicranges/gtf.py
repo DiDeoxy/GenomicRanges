@@ -1,6 +1,7 @@
-from typing import Union
-import pandas as pd
 import logging
+from typing import Union
+
+import pandas as pd
 from joblib import Parallel, delayed
 
 ## Variation of https://github.com/epiviz/epivizfileserver/src/epivizfileserver/cli.py
