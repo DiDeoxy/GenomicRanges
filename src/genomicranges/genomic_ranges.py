@@ -1,5 +1,6 @@
 """The `GenomicRanges` class."""
 
+from datetime import datetime
 from pathlib import Path
 from typing import List, MutableMapping, Optional, Tuple, Union, Iterator, Any
 
@@ -59,7 +60,8 @@ class GenomicRangesIterator:
 # could make them an optional parameter to the constructor. It would mostly be
 # used by methods that return a new GenomicRanges object. (This would be
 # similar to how you had it before). Would require additional validation, and
-# removal of the ranges setter.
+# removal of the ranges setter. Takes 4 min to make UCSC hg19 DataFrame and
+# only 2.5 seconds to make indices. Prolly not a singificant bottleneck.
 
 
 class GenomicRanges:
@@ -108,7 +110,8 @@ class GenomicRanges:
         indices : MutableMapping[str, NCLS32 | NCLS64]
             The indices.
         """
-        return {
+        print(f"{datetime.now()}: Creating indices.")
+        indices: MutableMapping[str, Union[NCLS32, NCLS64]] = {  # type: ignore
             group: NCLS(
                 rows["starts"].astype(int).to_list(),  # type: ignore
                 rows["ends"].astype(int).to_list(),  # type: ignore
@@ -116,6 +119,8 @@ class GenomicRanges:
             )
             for group, rows in ranges.groupby("seqnames")  # type: ignore
         }
+        print(f"{datetime.now()}: Created.")
+        return indices  # type: ignore
 
     def _validate_ranges(
         self, ranges: DataFrame
@@ -500,8 +505,9 @@ Class: 'GenomicRanges'
             The type of genome to load, one of: `"refGene"`, `"ensGene"`,
             `"knownGene"` or `"ncbiRefSeq"`. Default = `"refGene"`.
         """
-        return GenomicRanges(
-            parse_gtf_file(
-                construct_ucsc_gtf_file_url(genome, genome_type=genome_type)
-            )
+        print(f"{datetime.now()}: Loading UCSC genome GTF file.")
+        gtf_df = parse_gtf_file(
+            construct_ucsc_gtf_file_url(genome, genome_type=genome_type)
         )
+        print(f"{datetime.now()}: Loaded.")
+        return GenomicRanges(gtf_df)
