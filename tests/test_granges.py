@@ -116,5 +116,5 @@ def test_ucsc():
     assert len(ranges_data) == ranges_data.len()
     mcols = row_ranges.mcols()
     assert mcols is not None
-    assert mcols > 0
+    assert len(mcols) > 0
     assert ranges_data.granges() is not None
