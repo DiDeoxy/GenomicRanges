@@ -12,6 +12,7 @@ __author__ = "jkanche, whargrea"
 __copyright__ = "jkanche"
 __license__ = "MIT"
 
+# TODO: I made strand optional because one of your tests had no strand column.
 required_ranges_columns = ["seqnames", "starts", "ends"]
 strand = "strand"
 all_ranges_columns = required_ranges_columns + [strand]
@@ -54,6 +55,13 @@ class GenomicRangesIterator:
         return row, metadata  # type: ignore
 
 
+# TODO: If re-constructing the NCLS indices is prohibitivelly expensive, we
+# could make them an optional parameter to the constructor. It would mostly be
+# used by methods that return a new GenomicRanges object. (This would be
+# similar to how you had it before). Would require additional validation, and
+# removal of the ranges setter.
+
+
 class GenomicRanges:
     """The `GenomicRanges` class for representing genomic intervals."""
 
@@ -79,25 +87,54 @@ class GenomicRanges:
         ValueError
             If the `ranges` or `metadata` are not valid.
         """
-        self._ranges = self._validate_ranges(ranges)
+        self._ranges, self._indices = self._validate_ranges(ranges)  # type: ignore # noqa: E501
         self._metadata = self._validate_metadata(
             self._combine_metadata(ranges, metadata)
         )
-        self._indices = self._create_indices()  # type: ignore
 
-    def _validate_ranges(self, ranges: DataFrame) -> DataFrame:
-        """Validate and set the `ranges` data.
+    @staticmethod
+    def _create_indices(
+        ranges: DataFrame,
+    ) -> MutableMapping[str, Union[NCLS32, NCLS64]]:  # type: ignore
+        """Create the indices from the `ranges` data.
+
+        Parameters
+        ----------
+        ranges : DataFrame
+            The `ranges` data.
+
+        Returns
+        -------
+        indices : MutableMapping[str, NCLS32 | NCLS64]
+            The indices.
+        """
+        return {
+            group: NCLS(
+                rows["starts"].astype(int).to_list(),  # type: ignore
+                rows["ends"].astype(int).to_list(),  # type: ignore
+                rows["starts"].astype(str).to_list(),  # type: ignore
+            )
+            for group, rows in ranges.groupby("seqnames")  # type: ignore
+        }
+
+    def _validate_ranges(
+        self, ranges: DataFrame
+    ) -> Tuple[DataFrame, MutableMapping[str, Union[NCLS32, NCLS64]]]:  # type: ignore # noqa: E501
+        """Validate the `ranges` and create the `indices` data.
 
         Parameters
         ----------
         ranges : DataFrame
             Intervals as a `DataFrame`. Required columns are `seqnames`,
-            `starts`, `ends`, and `strand`. Extra columns will dropped.
+            `starts`, and `ends`, `strand` is optional. Extra columns will
+            dropped.
 
         Returns
         -------
         ranges : DataFrame
             The `ranges` data.
+        indices : MutableMapping[str, NCLS32 | NCLS64]
+            The indices.
 
         Raises
         ------
@@ -108,11 +145,13 @@ class GenomicRanges:
             if name not in ranges.columns:
                 raise ValueError(f"Missing column '{name}' in `ranges`.")
 
-        return (
+        ranges = (
             ranges[all_ranges_columns]
             if strand in ranges.columns
             else ranges[required_ranges_columns]
         )
+
+        return ranges, self._create_indices(ranges)  # type: ignore
 
     def _validate_metadata(
         self, metadata: Optional[DataFrame]
@@ -141,8 +180,9 @@ class GenomicRanges:
 
         return metadata
 
+    @staticmethod
     def _combine_metadata(
-        self, ranges: DataFrame, metadata: Optional[DataFrame]
+        ranges: DataFrame, metadata: Optional[DataFrame]
     ) -> Optional[DataFrame]:
         """Combine `ranges` and `metadata` metadata into a single `DataFrame`.
 
@@ -177,20 +217,6 @@ class GenomicRanges:
 
         return metadata
 
-    def _create_indices(
-        self,
-    ) -> MutableMapping[str, Union[NCLS32, NCLS64]]:  # type: ignore
-        """Create the indices from the `ranges` data."""
-        return {
-            group: NCLS(
-                rows["starts"].astype(int).to_list(),  # type: ignore
-                rows["ends"].astype(int).to_list(),  # type: ignore
-                # HERE: need index for this...
-                rows["starts"].astype(int).to_list(),  # type: ignore
-            )
-            for group, rows in self._ranges.groupby("seqnames")  # type: ignore
-        }
-
     @property
     def ranges(self) -> DataFrame:
         """Get or set the `ranges` of the `GenomicRanges` object.
@@ -198,7 +224,8 @@ class GenomicRanges:
         Parameters
         ----------
         ranges : DataFrame
-            A replacement ranges.
+            A replacement ranges, any metadata columns will be dropped. To
+            change the metadata, use the `metadata` property.
 
         Returns
         -------
@@ -212,6 +239,7 @@ class GenomicRanges:
         """
         return self._ranges
 
+    # TODO: accept a different number of ranges?
     @ranges.setter
     def ranges(self, ranges: DataFrame) -> None:
         if len(ranges) != len(self._ranges):
@@ -220,7 +248,7 @@ class GenomicRanges:
                 "`ranges`."
             )
 
-        self._ranges = self._validate_ranges(ranges)
+        self._ranges, self._indices = self._validate_ranges(ranges)  # type: ignore # noqa: E501
 
     @property
     def metadata(self) -> Optional[DataFrame]:
@@ -248,6 +276,7 @@ class GenomicRanges:
         self._metadata = self._validate_metadata(metadata)
 
     # TODO: rename metadata property to mcols?
+    @property
     def mcols(self) -> Optional[DataFrame]:
         """Get the metadata.
 
@@ -258,6 +287,7 @@ class GenomicRanges:
         """
         return self.metadata
 
+    @property
     def seqnames(self) -> Series:  # type: ignore
         """Get the chromosome or sequence names.
 
@@ -268,15 +298,19 @@ class GenomicRanges:
         """
         return self._ranges["seqnames"]  # type: ignore
 
-    def strand(self) -> Series:  # type: ignore
+    @property
+    def strand(self) -> Optional[Series]:  # type: ignore
         """Get the strand data.
 
         Returns
         -------
-        seqnames : Series[str]
-            Strand data by chromosome or sequence name.
+        seqnames : Series[str] | None
+            Strand data by chromosome or sequence name, if any.
         """
-        return self._ranges["strand"]  # type: ignore
+        if strand in self._ranges.columns:
+            return self._ranges[strand]  # type: ignore
+
+        return None
 
     def granges(self) -> "GenomicRanges":
         """Get a new `GenomicRanges` object without the `metadata`.
@@ -341,7 +375,7 @@ class GenomicRanges:
         """
         return f"""\
 Class: 'GenomicRanges'
-    int intervals: {self.ranges.shape[0]}
+    Num intervals: {self.ranges.shape[0]}
 """
 
     def __repr__(self) -> str:
@@ -373,7 +407,7 @@ Class: 'GenomicRanges'
             Indices exceeds the dataset dimensions
         """
         return GenomicRanges(
-            self.ranges.iloc[indices, :],
+            self._ranges.iloc[indices, :],
             None
             if self._metadata is None
             else self._metadata.iloc[indices, :],
@@ -398,6 +432,7 @@ Class: 'GenomicRanges'
         """
         hits: List[Optional[List[int]]] = []
         for row, _ in x:  # type: ignore
+            # TODO: figure out actual iterator return type
             row_hits: Iterator[Tuple[Any, Any, int]] = self._indices[  # type: ignore # noqa: E501
                 row["seqnames"]
             ].find_overlap(  # type: ignore
@@ -409,6 +444,8 @@ Class: 'GenomicRanges'
                 sub_hits.append(hit[2])
                 if len(sub_hits) >= k:
                     break
+
+            hits.append(sub_hits if len(sub_hits) > 0 else None)
 
         return hits
 
@@ -453,7 +490,7 @@ Class: 'GenomicRanges'
     def from_ucsc(
         genome: str, genome_type: str = "refGene"
     ) -> "GenomicRanges":
-        """Load a `GTF` file from UCSC as a `GenomicRanges` object.
+        """Load a genome `GTF` file from UCSC as a `GenomicRanges` object.
 
         Parameters
         ----------

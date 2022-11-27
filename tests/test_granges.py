@@ -7,7 +7,7 @@ from pandas import DataFrame
 
 from genomicranges import GenomicRanges
 
-__author__ = "jkanche"
+__author__ = "jkanche, whargrea"
 __copyright__ = "jkanche"
 __license__ = "MIT"
 
@@ -63,18 +63,23 @@ def test_bad_row_data():
         )
 
 
-def test_properties():
-    """Test that we can get the properties of a GenomicRanges object."""
-    assert len(row_ranges) == row_ranges.len()
-    assert len(row_ranges) == len(row_data)
-    mcols = row_ranges.mcols()
-    assert mcols is not None
-    assert len(mcols) == len(row_data)
+def test_export():
+    """Test that we can export `GenomicRanges` data to a `DataFrame`."""
+    new_row_data = row_ranges.to_df()
+    assert new_row_data is not None
+    assert len(new_row_data) == len(row_ranges)
 
 
-def test_methods():
+def test_granges():
+    """Test the `grab_ranges` method."""
+    granges = row_ranges.granges()
+    assert len(granges) == len(row_ranges)
+    assert granges.metadata is None
+
+
+def test_minor_methods():
     """Test the methods of a `GenomicRanges` object."""
-    assert isinstance(row_ranges.granges(), GenomicRanges)
+    assert row_ranges.len() == len(row_ranges)
 
 
 def test_nearest():
@@ -88,33 +93,28 @@ def test_nearest():
             }
         )
     )
-
     hits = row_ranges.nearest(nearest_ranges)
-    assert hits is not None
+    assert len(hits) > 0
 
 
-def test_slices():
+def test_properties():
+    """Test properties of a `GenomicRanges` object."""
+    assert row_ranges.mcols is not None
+    assert row_ranges.metadata is not None
+    assert row_ranges.ranges is not None
+    assert row_ranges.seqnames is not None  # type: ignore
+    assert row_ranges.strand is not None  # type: ignore
+
+
+def test_slicing():
     """Test that we can get slices of a `GenomicRanges` object."""
-    subset_genomic_ranges = row_ranges[5:8]
+    row_ranges_subset = row_ranges[5:8]
 
-    assert subset_genomic_ranges is not None
-    assert len(subset_genomic_ranges) == 3
-
-
-def test_export():
-    """Test that we can export `GenomicRanges` data to a `DataFrame`."""
-    new_row_data = row_ranges.to_df()
-
-    assert new_row_data is not None
-    assert new_row_data.shape[0] == len(row_ranges)
+    assert row_ranges_subset is not None
+    assert len(row_ranges_subset) == 3
 
 
 def test_ucsc():
-    ranges_data = GenomicRanges.from_ucsc("hg19")
-    assert ranges_data is not None
-    assert ranges_data.len() > 0
-    assert len(ranges_data) == ranges_data.len()
-    mcols = row_ranges.mcols()
-    assert mcols is not None
-    assert len(mcols) > 0
-    assert ranges_data.granges() is not None
+    ucsc_ranges = GenomicRanges.from_ucsc("hg19")
+    assert ucsc_ranges.mcols is not None
+    assert len(ucsc_ranges.mcols) >= 0
