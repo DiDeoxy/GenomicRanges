@@ -1,14 +1,17 @@
-from random import random
+"""Test the `GenomicRanges` class."""
 
-import pandas as pd
-import pytest
-from genomicranges.genomic_ranges import GenomicRanges
+from random import random
+from pytest import raises
+
+from pandas import DataFrame
+
+from genomicranges import GenomicRanges
 
 __author__ = "jkanche"
 __copyright__ = "jkanche"
 __license__ = "MIT"
 
-df_gr = pd.DataFrame(
+row_data = DataFrame(
     {
         "seqnames": [
             "chr1",
@@ -30,19 +33,54 @@ df_gr = pd.DataFrame(
     }
 )
 
-gr = GenomicRanges.fromPandas(df_gr)
+row_ranges = GenomicRanges(row_data)
 
 
-def test_granges():
-    assert gr is not None
-    assert gr.len() == df_gr.shape[0]
-    assert len(gr) == gr.len()
-    assert gr.mcols() is not None
-    assert gr.mcols().shape[0] == df_gr.shape[0]
-    assert gr.granges() is not None
+def test_bad_row_data():
+    """Test that we can't create a GenomicRanges object with bad row data."""
+    with raises(ValueError):
+        GenomicRanges(
+            DataFrame(
+                {
+                    "starts": range(100, 110),
+                    "ends": range(110, 120),
+                    "strand": [
+                        "-",
+                        "+",
+                        "+",
+                        "*",
+                        "*",
+                        "+",
+                        "+",
+                        "+",
+                        "-",
+                        "-",
+                    ],
+                    "score": range(0, 10),
+                    "GC": [random() for _ in range(10)],
+                }
+            )
+        )
 
-    test_gr = GenomicRanges.fromPandas(
-        pd.DataFrame(
+
+def test_properties():
+    """Test that we can get the properties of a GenomicRanges object."""
+    assert len(row_ranges) == row_ranges.len()
+    assert len(row_ranges) == len(row_data)
+    mcols = row_ranges.mcols()
+    assert mcols is not None
+    assert len(mcols) == len(row_data)
+
+
+def test_methods():
+    """Test the methods of a `GenomicRanges` object."""
+    assert isinstance(row_ranges.granges(), GenomicRanges)
+
+
+def test_nearest():
+    """Test that we can get the nearest ranges."""
+    nearest_ranges = GenomicRanges(
+        DataFrame(
             {
                 "seqnames": ["chr1", "chr2", "chr3"],
                 "starts": [100, 115, 119],
@@ -51,20 +89,32 @@ def test_granges():
         )
     )
 
-    hits = gr.nearest(test_gr)
-    print(hits)
+    hits = row_ranges.nearest(nearest_ranges)
     assert hits is not None
 
 
-def test_granges_slices():
-    subset_gr = gr[5:8]
+def test_slices():
+    """Test that we can get slices of a `GenomicRanges` object."""
+    subset_genomic_ranges = row_ranges[5:8]
 
-    assert subset_gr is not None
-    assert len(subset_gr) == 3
+    assert subset_genomic_ranges is not None
+    assert len(subset_genomic_ranges) == 3
 
 
 def test_export():
-    df = gr.toDF()
+    """Test that we can export `GenomicRanges` data to a `DataFrame`."""
+    new_row_data = row_ranges.to_df()
 
-    assert df is not None
-    assert df.shape[0] == len(gr)
+    assert new_row_data is not None
+    assert new_row_data.shape[0] == len(row_ranges)
+
+
+def test_ucsc():
+    ranges_data = GenomicRanges.from_ucsc("hg19")
+    assert ranges_data is not None
+    assert ranges_data.len() > 0
+    assert len(ranges_data) == ranges_data.len()
+    mcols = row_ranges.mcols()
+    assert mcols is not None
+    assert mcols > 0
+    assert ranges_data.granges() is not None

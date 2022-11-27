@@ -21,4 +21,5 @@ except PackageNotFoundError:  # pragma: no cover
 finally:
     del version, PackageNotFoundError
 
-from .genomic_ranges import GenomicRanges
+from .genomic_ranges import GenomicRanges as GenomicRanges
+from .utils import parse_gtf_file as parse_gtf_file
